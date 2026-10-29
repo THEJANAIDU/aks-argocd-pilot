@@ -1,0 +1,11 @@
+{
+  "subscription": "11111111-1111-1111-1111-111111111111",
+  "resource_group": "rg-aks-demo",
+  "cluster": "aks-demo",
+  "context": "aks-demo",
+  "namespace": "pilot-demo",
+  "application": "pilot-demo",
+  "image": "ghcr.io/example/sample@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "repo_url": "https://github.com/THEJANAIDU/aks-argocd-pilot.git",
+  "revision": "0000000000000000000000000000000000000000"
+}

@@ -1,0 +1,1 @@
+The YAML files in this directory are unmodified Argo CD v3.5.6 sources from https://github.com/argoproj/argo-cd/tree/v3.5.6/manifests (Apache-2.0). SHA256 files record their checksums. namespace-install.yaml excludes CRDs; the three vendored CRD files are installed separately. Review release notes before upgrading.

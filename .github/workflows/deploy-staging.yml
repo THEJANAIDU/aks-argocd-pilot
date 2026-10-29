@@ -1,0 +1,63 @@
+name: Deploy reviewed staging release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-delivery
+  cancel-in-progress: false
+jobs:
+  deploy:
+    environment: staging
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - name: Load reviewed configuration
+        env:
+          AGENT_CONFIG: ${{ vars.AGENT_CONFIG_JSON }}
+        run: |
+          python - <<'PYCODE'
+          import json, os
+          from pathlib import Path
+          Path('config.json').write_text(json.dumps(json.loads(os.environ['AGENT_CONFIG'])))
+          PYCODE
+          python agent.py validate --config config.json
+      - run: python agent.py render --config config.json --output generated
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: 'v0.2.22'
+      - name: Fetch user kubeconfig for configured cluster
+        run: |
+          python - <<'PYCODE'
+          import json, subprocess, os
+          c=json.load(open('config.json'))
+          subprocess.run(['az','aks','get-credentials','--subscription',c['subscription'],'-g',c['resource_group'],'-n',c['cluster'],'--context',c['context'],'--file',os.environ['RUNNER_TEMP']+'/pilot.kubeconfig'],check=True)
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('KUBECONFIG='+os.environ['RUNNER_TEMP']+'/pilot.kubeconfig\n')
+          PYCODE
+          kubelogin convert-kubeconfig -l azurecli
+      - run: python agent.py doctor --config config.json
+      - name: Submit GitOps release (platform must already be bootstrapped)
+        run: python agent.py deploy --config config.json --yes
+      - name: Wait for reconciliation
+        run: |
+          for i in $(seq 1 40); do
+            if python agent.py status --config config.json; then exit 0; fi
+            sleep 15
+          done
+          exit 1
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/pilot.kubeconfig"
+
